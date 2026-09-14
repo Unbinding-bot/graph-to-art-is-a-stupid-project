@@ -910,125 +910,137 @@ html, body {
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .modal-actions .opt-btn { min-width: 70px; }
 
-/* ===== Mobile / small screen ===== */
-@media (max-width: 640px) {
-  :root {
-    --toolbar-w:  0px;
-    --panel-w:    0px;
-    --options-h:  44px;
-    --status-h:   0px;   /* hidden on mobile */
-    --mobile-toolbar-h: 56px;
-    --mobile-panel-h:   52vh;
-  }
+/* ===== Mobile — always hidden on desktop ===== */
+#mobile-nav   { display: none; }
+#mobile-sheet { display: none; }
+.mobile-panel-btn { display: none; }
 
-  /* Full-screen grid: options | canvas | bottom-toolbar */
+/* ===== Mobile layout (≤640px) ===== */
+@media (max-width: 640px) {
+  /* Override desktop chrome */
+  #toolbar, #options-bar, #status-bar, #panel { display: none !important; }
+
+  /* Full viewport canvas */
   #app {
     grid-template-columns: 1fr;
-    grid-template-rows: var(--options-h) 1fr var(--mobile-toolbar-h);
-    grid-template-areas:
-      "options"
-      "canvas"
-      "toolbar";
+    grid-template-rows: 1fr;
+    grid-template-areas: "canvas";
   }
 
-  /* Options bar: scrollable, slightly taller */
-  #options-bar {
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    padding: 0 8px;
-    gap: 6px;
-    scrollbar-width: none;
-  }
-  #options-bar::-webkit-scrollbar { display: none; }
-
-  /* Status bar: hidden on mobile (coordinates not useful) */
-  #status-bar { display: none; }
-
-  /* Panel toggle button: visible on mobile */
-  .mobile-panel-btn { display: flex !important; }
-
-  /* Toolbar becomes a horizontal strip at the bottom */
-  #toolbar {
-    grid-area: toolbar;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    padding: 0 8px;
-    gap: 2px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-right: none;
-    border-top: 1px solid var(--border);
-    height: var(--mobile-toolbar-h);
-    scrollbar-width: none;
-    /* safe area bottom padding for iPhone home bar */
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  #toolbar::-webkit-scrollbar { display: none; }
-
-  .tool-btn { width: 44px; height: 44px; flex-shrink: 0; }
-  .tool-btn svg { width: 20px; height: 20px; }
-
-  .tool-sep {
-    width: 1px;
-    height: 28px;
-    margin: 0 3px;
+  #canvas-wrap {
+    grid-area: canvas;
+    /* room for toolstrip at top and nav at bottom */
+    margin-top: calc(52px + env(safe-area-inset-top, 0px));
+    margin-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Color swatches in the horizontal toolbar */
-  #color-swatches {
-    width: 44px;
-    height: 44px;
-    flex-shrink: 0;
-    margin: 0;
-  }
-
-  /* Right panel: overlay drawer from the bottom */
-  #panel {
-    grid-area: canvas; /* overlays canvas */
-    position: absolute;
-    bottom: var(--mobile-toolbar-h);
+  /* ── Top toolstrip ── */
+  #mobile-toolstrip {
+    position: fixed;
+    top: env(safe-area-inset-top, 0px);
     left: 0; right: 0;
-    height: var(--mobile-panel-h);
-    z-index: 50;
-    border-left: none;
+    height: 52px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    gap: 1px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    z-index: 90;
+    -webkit-overflow-scrolling: touch;
+  }
+  #mobile-toolstrip::-webkit-scrollbar { display: none; }
+  #mobile-toolstrip .tool-btn { width: 44px; height: 44px; flex-shrink: 0; }
+  #mobile-toolstrip .tool-btn svg { width: 20px; height: 20px; }
+  #mobile-toolstrip .tool-sep { width: 1px; height: 26px; margin: 0 2px; flex-shrink: 0; }
+  #mobile-toolstrip #color-swatches { width: 44px; height: 44px; flex-shrink: 0; margin: 0 2px; }
+
+  /* ── Bottom navigation bar ── */
+  #mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--surface);
     border-top: 1px solid var(--border);
-    border-radius: 14px 14px 0 0;
-    box-shadow: 0 -8px 32px rgba(0,0,0,.6);
-    transform: translateY(100%);
-    transition: transform .25s cubic-bezier(.4,0,.2,1);
-  }
-  #panel.mobile-open {
-    transform: translateY(0);
+    z-index: 100;
   }
 
-  /* Panel top half — smaller on mobile */
-  #panel-top { flex: 0 0 55%; }
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-family: inherit;
+    font-weight: 600;
+    -webkit-tap-highlight-color: transparent;
+    transition: color .12s, background .12s;
+    padding: 0 4px;
+  }
+  .mobile-nav-btn svg { width: 22px; height: 22px; }
+  .mobile-nav-btn.active { color: var(--accent-hi); }
+  .mobile-nav-btn:active { background: var(--surface2); }
 
-  /* Panel drag handle */
-  #panel::before {
-    content: '';
-    display: block;
-    width: 36px;
-    height: 4px;
-    background: var(--border);
+  /* ── Bottom sheet ── */
+  #mobile-sheet {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+    left: 0; right: 0;
+    max-height: 68vh;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 40px rgba(0,0,0,.65);
+    z-index: 99;
+    transform: translateY(calc(100% + 2px));
+    transition: transform .28s cubic-bezier(.4,0,.2,1);
+    overflow: hidden;
+  }
+  #mobile-sheet.open { transform: translateY(0); }
+
+  /* Drag handle */
+  #mobile-sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--surface3);
     border-radius: 2px;
-    margin: 8px auto 4px;
+    margin: 10px auto 0;
     flex-shrink: 0;
   }
 
-  /* Canvas wrap: no margin needed */
-  #canvas-wrap { grid-area: canvas; }
+  /* Sheet content */
+  #mobile-sheet-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 0 12px;
+  }
 
-  /* Tooltip on mobile: show below (toolbar tip would go off-screen) */
-  .tool-btn[data-tip]::after {
-    left: 50%;
-    top: auto;
-    bottom: calc(100% + 8px);
-    transform: translateX(-50%);
+  /* Each named section inside the sheet */
+  .mobile-sheet-section { display: none; padding: 0 12px; }
+  .mobile-sheet-section.active { display: block; }
+
+  /* Reuse desktop panel styles inside the sheet */
+  .mobile-sheet-section .panel-opts-group { gap: 10px; }
+  .mobile-sheet-section .panel-section {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0;
   }
 }
-
-/* Hide panel toggle on desktop */
-.mobile-panel-btn { display: none; }

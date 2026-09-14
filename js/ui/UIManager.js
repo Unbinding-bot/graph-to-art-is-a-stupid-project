@@ -240,6 +240,9 @@ export class UIManager {
     // Init swatch outline state (FG active by default)
     this.app._pickingBg = false;
     this._updateSwatchActiveState();
+
+    // Mobile UI (no-op on desktop)
+    this._initMobile();
   }
 
   // ── Swatch active state (shows which color the inline picker is editing) ──
@@ -484,6 +487,9 @@ export class UIManager {
     if (!container.children.length) {
       container.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px 0">No equations yet. Draw a stroke to fit one.</div>';
     }
+    // Keep mobile mirror in sync
+    const mDst = document.getElementById('mobile-equations-list');
+    if (mDst) mDst.innerHTML = container.innerHTML;
 
     container.querySelectorAll('.eq-vis-toggle').forEach(cb => {
       cb.addEventListener('change', (e) => {
@@ -541,6 +547,194 @@ export class UIManager {
     if (!el) return;
     el.textContent = msg;
     setTimeout(() => { el.textContent = ''; }, 1500);
+  }
+
+  // ── Mobile UI ─────────────────────────────────────────────────────────────
+
+  _initMobile() {
+    const isMobile = () => window.matchMedia('(max-width: 640px)').matches;
+    if (!isMobile()) return;
+
+    // ── Toolstrip: clone toolbar buttons into #mobile-toolstrip ──
+    const toolstrip = document.getElementById('mobile-toolstrip');
+    const toolbar   = document.getElementById('toolbar');
+    if (toolstrip && toolbar) {
+      toolstrip.innerHTML = toolbar.innerHTML;
+      // Wire cloned tool buttons
+      toolstrip.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+        btn.addEventListener('click', () => this.app.toolManager.activate(btn.dataset.tool));
+      });
+      // Wire cloned swatch buttons
+      toolstrip.querySelector('#swatch-fg')?.addEventListener('click', (e) => {
+        this.app._pickingBg = false;
+        this.app.colorPicker.setHex(this.app.foreColor);
+        this.app.colorPicker.open(this.app.foreColor, e.currentTarget);
+        this._updateSwatchActiveState();
+      });
+      toolstrip.querySelector('#swatch-bg')?.addEventListener('click', (e) => {
+        this.app._pickingBg = true;
+        this.app.colorPicker.setHex(this.app.backColor);
+        this.app.colorPicker.open(this.app.backColor, e.currentTarget);
+        this._updateSwatchActiveState();
+      });
+      toolstrip.querySelector('#swap-colors-btn')?.addEventListener('click', () => {
+        const tmp = this.app.foreColor;
+        this.app.setForeColor(this.app.backColor);
+        this.app.setBackColor(tmp);
+      });
+      toolstrip.querySelector('#reset-colors-btn')?.addEventListener('click', () => {
+        this.app.setForeColor('#ffffff');
+        this.app.setBackColor('#000000');
+      });
+    }
+
+    // ── Bottom nav: open/close sheet sections ──
+    const sheet = document.getElementById('mobile-sheet');
+    let activeNavBtn = null;
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const section = btn.dataset.sheet;
+        const isOpen  = sheet?.classList.contains('open');
+        const isSame  = activeNavBtn === btn;
+
+        // Toggle sheet closed if same tab tapped again
+        if (isOpen && isSame) {
+          sheet?.classList.remove('open');
+          btn.classList.remove('active');
+          activeNavBtn = null;
+          return;
+        }
+
+        // Switch section
+        document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.mobile-sheet-section').forEach(s => s.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelector(`.mobile-sheet-section[data-section="${section}"]`)?.classList.add('active');
+        sheet?.classList.add('open');
+        activeNavBtn = btn;
+
+        // Refresh live content when opening
+        if (section === 'layers')    this._refreshMobileLayers();
+        if (section === 'equations') this._refreshMobileEquations();
+        if (section === 'tools')     this._refreshMobileToolOpts();
+      });
+    });
+
+    // Swipe down on handle to close
+    const handle = document.getElementById('mobile-sheet-handle');
+    if (handle && sheet) {
+      let ty0 = 0;
+      handle.addEventListener('touchstart', e => { ty0 = e.touches[0].clientY; }, { passive: true });
+      handle.addEventListener('touchend',   e => {
+        if (e.changedTouches[0].clientY - ty0 > 50) {
+          sheet.classList.remove('open');
+          document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+          activeNavBtn = null;
+        }
+      }, { passive: true });
+    }
+
+    // ── Embed inline color picker into the mobile color section ──
+    const mobilePicker = document.getElementById('mobile-color-picker');
+    if (mobilePicker) {
+      this.app.colorPicker.embedIn(mobilePicker);
+    }
+    // Sync FG/BG dots in mobile color section
+    document.getElementById('mobile-color-target-fg')?.addEventListener('click', () => {
+      this.app._pickingBg = false;
+      this._updateSwatchActiveState();
+    });
+    document.getElementById('mobile-color-target-bg')?.addEventListener('click', () => {
+      this.app._pickingBg = true;
+      this._updateSwatchActiveState();
+    });
+
+    // ── Options section buttons ──
+    document.getElementById('mobile-zoom-reset-btn')?.addEventListener('click', () => {
+      const cm = this.app.canvasManager;
+      cm.view = { xMin: -10, xMax: 10, yMin: -10, yMax: 10 };
+      cm.resize(); this.app.render();
+    });
+    document.getElementById('mobile-save-btn')?.addEventListener('click', () => this.app.fileManager.save());
+    document.getElementById('mobile-load-btn')?.addEventListener('click', () => document.getElementById('load-input').click());
+    document.getElementById('mobile-export-btn')?.addEventListener('click', () => this.app.fileManager.exportPNG());
+    document.getElementById('mobile-undo-btn')?.addEventListener('click', () => {
+      this.app.layerManager.undo(); this.refreshEquationsPanel(); this.app.render();
+    });
+    document.getElementById('mobile-redo-btn')?.addEventListener('click', () => {
+      this.app.layerManager.redo(); this.refreshEquationsPanel(); this.app.render();
+    });
+
+    // Fit checkboxes — keep in sync with desktop
+    ['Linear','Quad','Cubic','Circle'].forEach(name => {
+      const mobileEl  = document.getElementById(`mobile-chk${name}`);
+      const desktopEl = document.getElementById(`chk${name}`);
+      mobileEl?.addEventListener('change', e => {
+        this.app.fitOptions[name.toLowerCase()] = e.target.checked;
+        if (desktopEl) desktopEl.checked = e.target.checked;
+        this.refreshEquationsPanel();
+      });
+    });
+
+    // ── Mobile equations buttons ──
+    const worldRange = () => this.app.canvasManager.view.xMax - this.app.canvasManager.view.xMin;
+    document.getElementById('mobile-eq-copy-all-btn')?.addEventListener('click', () => {
+      document.getElementById('eq-copy-all-btn')?.click();
+    });
+    document.getElementById('mobile-eq-only-btn')?.addEventListener('click', () => {
+      document.getElementById('eq-only-btn')?.click();
+    });
+
+    // ── Layer add ──
+    document.getElementById('mobile-layer-add-btn')?.addEventListener('click', () => {
+      this.app.layerManager.addLayer();
+      this._refreshMobileLayers();
+      this.app.render();
+    });
+
+    // Keep toolstrip active state in sync
+    const origSetActive = this.setActiveTool.bind(this);
+    this.setActiveTool = (name) => {
+      origSetActive(name);
+      toolstrip?.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === name);
+      });
+      this._refreshMobileToolOpts();
+    };
+  }
+
+  _refreshMobileToolOpts() {
+    const mount  = document.getElementById('mobile-tool-opts-mount');
+    const source = document.getElementById('panel-tool-opts');
+    if (!mount || !source) return;
+    // Show the active tool's options group inside the mobile sheet
+    mount.innerHTML = '';
+    const toolName = this.app.toolManager.currentName;
+    const group = source.querySelector(`.panel-opts-group[data-panel-opts="${toolName}"]`);
+    if (group) {
+      const clone = group.cloneNode(true);
+      clone.style.display = 'flex';
+      mount.appendChild(clone);
+    }
+    const header = document.createElement('div');
+    header.style.cssText = 'font-size:10px;font-weight:700;color:var(--accent-hi);letter-spacing:.08em;text-transform:uppercase;padding:4px 0 10px';
+    header.textContent = document.getElementById('tool-name-label')?.textContent ?? '';
+    mount.prepend(header);
+  }
+
+  _refreshMobileLayers() {
+    const lm     = this.app.layerManager;
+    const list   = document.getElementById('mobile-layer-list');
+    if (!list) return;
+    // Reuse the same render logic as the desktop layer panel but target mobile-layer-list
+    const tmp = document.getElementById('layer-list');
+    if (tmp) list.innerHTML = tmp.innerHTML;
+  }
+
+  _refreshMobileEquations() {
+    const src = document.getElementById('equations-list');
+    const dst = document.getElementById('mobile-equations-list');
+    if (src && dst) dst.innerHTML = src.innerHTML;
   }
 }
 
