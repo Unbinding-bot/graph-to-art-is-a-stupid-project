@@ -910,10 +910,13 @@ html, body {
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .modal-actions .opt-btn { min-width: 70px; }
 
-/* ===== Mobile — always hidden on desktop ===== */
-#mobile-nav   { display: none; }
-#mobile-sheet { display: none; }
-.mobile-panel-btn { display: none; }
+/* ===== Mobile elements — hidden on desktop ===== */
+@media (min-width: 641px) {
+  #mobile-nav      { display: none !important; }
+  #mobile-sheet    { display: none !important; }
+  #mobile-toolstrip{ display: none !important; }
+  .mobile-panel-btn { display: none !important; }
+}
 
 /* ===== Mobile layout (≤640px) ===== */
 @media (max-width: 640px) {
@@ -936,6 +939,7 @@ html, body {
 
   /* ── Top toolstrip ── */
   #mobile-toolstrip {
+    display: flex;
     position: fixed;
     top: env(safe-area-inset-top, 0px);
     left: 0; right: 0;

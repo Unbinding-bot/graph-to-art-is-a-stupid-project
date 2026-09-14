@@ -552,8 +552,7 @@ export class UIManager {
   // ── Mobile UI ─────────────────────────────────────────────────────────────
 
   _initMobile() {
-    const isMobile = () => window.matchMedia('(max-width: 640px)').matches;
-    if (!isMobile()) return;
+    // Always wire mobile UI — CSS handles show/hide
 
     // ── Toolstrip: clone toolbar buttons into #mobile-toolstrip ──
     const toolstrip = document.getElementById('mobile-toolstrip');
