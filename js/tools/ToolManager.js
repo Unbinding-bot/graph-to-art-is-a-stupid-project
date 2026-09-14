@@ -31,5 +31,5 @@ export class ToolManager {
   onUp(pos, e)     { this.current?.onUp?.(pos, e);     }
   onCancel(pos, e) { this.current?.onCancel?.(pos, e); }
   onDblClick(pos, e) { this.current?.onDblClick?.(pos, e); }
-  onKeyDown(e)     { this.current?.onKeyDown?.(e);     }
+  onKeyDown(e)     { return this.current?.onKeyDown?.(e); }
 }

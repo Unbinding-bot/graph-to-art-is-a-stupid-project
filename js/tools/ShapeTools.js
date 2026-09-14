@@ -282,8 +282,23 @@ export const PolygonTool = createTool({
   onDblClick() { if (this._active && this._pts.length >= 3) this._commit(); },
 
   onKeyDown(e) {
-    if (e.key==='Escape') { this._pts=[]; this._active=false; this.cm.clearOverlay(); this.cm.drawEquationOverlays(this.lm.layers); }
-    if (e.key==='Enter' && this._active && this._pts.length>=3) this._commit();
+    if (e.key === 'Escape') {
+      this._pts=[]; this._active=false;
+      this.cm.clearOverlay(); this.cm.drawEquationOverlays(this.lm.layers);
+      return true;
+    }
+    if (e.key === 'Enter' && this._active && this._pts.length >= 3) {
+      this._commit(); return true;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && this._active) {
+      e.preventDefault();
+      if (this._pts.length > 0) {
+        this._pts.pop();
+        if (this._pts.length === 0) { this._active = false; this.cm.clearOverlay(); this.cm.drawEquationOverlays(this.lm.layers); }
+        else this._preview(null);
+      }
+      return true; // consumed — don't fire global undo
+    }
   },
 
   _commit() {

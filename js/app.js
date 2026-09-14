@@ -988,7 +988,12 @@ class App {
 
       if (e.ctrlKey || e.metaKey) {
         switch (e.key.toLowerCase()) {
-          case 'z': e.preventDefault(); lm.undo(); this.ui.refreshEquationsPanel(); this.render(); break;
+          case 'z': e.preventDefault();
+            // Let the active tool intercept first (e.g. undo last polygon point)
+            if (!this.toolManager.onKeyDown(e)) {
+              lm.undo(); this.ui.refreshEquationsPanel(); this.render();
+            }
+            break;
           case 'y': e.preventDefault(); lm.redo(); this.ui.refreshEquationsPanel(); this.render(); break;
           case 's': e.preventDefault(); this.fileManager.save(); break;
           case 'o': e.preventDefault(); document.getElementById('load-input').click(); break;

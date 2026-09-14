@@ -362,8 +362,22 @@ export const PolygonalLassoTool = createTool({
   },
 
   onKeyDown(e) {
-    if (e.key === 'Escape') { this._pts = []; this._active = false; this.cm.clearOverlay(); }
-    if (e.key === 'Enter' && this._active && this._pts.length >= 3) this._commit();
+    if (e.key === 'Escape') {
+      this._pts = []; this._active = false; this.cm.clearOverlay();
+      return true;
+    }
+    if (e.key === 'Enter' && this._active && this._pts.length >= 3) {
+      this._commit(); return true;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && this._active) {
+      e.preventDefault();
+      if (this._pts.length > 0) {
+        this._pts.pop();
+        if (this._pts.length === 0) { this._active = false; this.cm.clearOverlay(); }
+        else this._drawPreview(null);
+      }
+      return true;
+    }
   },
 
   _commit() {
