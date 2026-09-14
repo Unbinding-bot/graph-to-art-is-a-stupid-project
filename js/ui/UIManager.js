@@ -98,6 +98,22 @@ export class UIManager {
     document.getElementById('load-btn')?.addEventListener('click', () => {
       document.getElementById('load-input').click();
     });
+
+    // Mobile panel toggle
+    document.getElementById('panel-toggle-btn')?.addEventListener('click', () => {
+      const panel = document.getElementById('panel');
+      if (panel) panel.classList.toggle('mobile-open');
+    });
+    // Swipe-down on the panel handle to close it
+    const panel = document.getElementById('panel');
+    if (panel) {
+      let touchStartY = 0;
+      panel.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+      panel.addEventListener('touchend', e => {
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (dy > 60) panel.classList.remove('mobile-open');
+      }, { passive: true });
+    }
     document.getElementById('load-input')?.addEventListener('change', e => {
       const file = e.target.files[0];
       if (file) { this.app.fileManager.load(file); e.target.value = ''; }

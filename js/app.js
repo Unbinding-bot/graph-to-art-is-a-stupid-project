@@ -875,14 +875,16 @@ class App {
 
     // Touch
     let lastTouchDist = null;
+    let lastTouchMidX = 0, lastTouchMidY = 0; // for two-finger pan
     ec.addEventListener('touchstart', (e) => {
       e.preventDefault();
       if (e.touches.length === 2) {
-        // pinch-to-zoom start
         lastTouchDist = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY,
         );
+        lastTouchMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        lastTouchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         return;
       }
       lastTouchDist = null;
@@ -901,8 +903,16 @@ class App {
         const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
         const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
         const rect = ec.getBoundingClientRect();
+
+        // Pinch-to-zoom
         cm.zoom(midX - rect.left, midY - rect.top, dist / lastTouchDist);
+
+        // Two-finger pan
+        cm.pan(midX - lastTouchMidX, midY - lastTouchMidY);
+
         lastTouchDist = dist;
+        lastTouchMidX = midX;
+        lastTouchMidY = midY;
         this.render();
         return;
       }
@@ -915,9 +925,23 @@ class App {
       lastTouchDist = null;
       if (!down) return;
       down = false;
-      const pos = cm.getPointerPos(e);
+      // Use changedTouches — touches[] is empty when finger lifts
+      const touch = e.changedTouches[0];
+      const rect  = ec.getBoundingClientRect();
+      const px    = touch.clientX - rect.left;
+      const py    = touch.clientY - rect.top;
+      const pos   = { px, py, ...cm.toWorld(px, py) };
       this.toolManager.onUp(pos, e);
     });
+
+    // Global touch-end: catches finger-lifts outside the canvas
+    window.addEventListener('touchend', () => {
+      if (this._selMoving) { this.selMoveCommit(); return; }
+      if (down) {
+        down = false;
+        this.toolManager.onCancel?.();
+      }
+    }, { passive: true });
   }
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
