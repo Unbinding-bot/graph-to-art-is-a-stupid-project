@@ -172,6 +172,23 @@ export class UIManager {
       this._updateSwatchActiveState();
     });
 
+    // Add reference image
+    document.getElementById('add-reference-btn')?.addEventListener('click', () => {
+      document.getElementById('reference-input').click();
+    });
+    document.getElementById('reference-input')?.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        this.app.layerManager.addReferenceLayer(file.name.replace(/\.[^.]+$/, ''), ev.target.result);
+        this.refreshLayerPanel();
+        this.app.render();
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
+
     // Layer add button
     document.getElementById('layer-add-btn').addEventListener('click', () => {
       this.app.layerManager.addLayer();
@@ -464,6 +481,7 @@ export class UIManager {
       const realIdx = lm.layers.indexOf(layer);
       const div = document.createElement('div');
       div.className = 'layer-item' + (realIdx === lm.activeIndex ? ' active' : '');
+      if (layer.isReference) div.className += ' layer-reference';
       div.dataset.layerId = layer.id;
 
       const thumb = document.createElement('canvas');
@@ -472,25 +490,48 @@ export class UIManager {
       thumb.height = 32;
       thumb.getContext('2d').drawImage(layer.canvas, 0, 0, 32, 32);
 
-      div.innerHTML = `
-        <div class="layer-row1">
-          <button class="layer-vis-btn" data-id="${layer.id}" title="Toggle visibility">
-            ${layer.visible ? '👁' : '🚫'}
-          </button>
-          <input class="layer-name" data-id="${layer.id}" value="${escHtml(layer.name)}" title="Double-click to rename">
-          <div class="layer-actions">
-            <button class="layer-action-btn" data-action="dup"   data-id="${layer.id}" title="Duplicate">⧉</button>
-            <button class="layer-action-btn" data-action="merge" data-id="${layer.id}" title="Merge down">⬇</button>
-            <button class="layer-action-btn danger" data-action="del" data-id="${layer.id}" title="Delete">✕</button>
+      if (layer.isReference) {
+        // Reference layer: show opacity controls, no dup/merge
+        const opPct = Math.round(layer.opacity * 100);
+        div.innerHTML = `
+          <div class="layer-row1">
+            <button class="layer-vis-btn" data-id="${layer.id}" title="Toggle visibility">
+              ${layer.visible ? '👁' : '🚫'}
+            </button>
+            <input class="layer-name" data-id="${layer.id}" value="${escHtml(layer.name)}" title="Double-click to rename">
+            <span style="font-size:9px;color:var(--accent-hi);font-weight:700;letter-spacing:.05em;flex-shrink:0">REF</span>
+            <div class="layer-actions">
+              <button class="layer-action-btn danger" data-action="del" data-id="${layer.id}" title="Delete">✕</button>
+            </div>
           </div>
-        </div>`;
+          <div class="layer-row2" style="display:flex;align-items:center;gap:6px;margin-top:5px">
+            <label style="font-size:11px;color:var(--text-dim);min-width:44px">Opacity</label>
+            <input type="range" class="opt-slider ref-opacity-slider" min="0" max="100"
+                   value="${opPct}" data-id="${layer.id}">
+            <input type="number" class="opt-num ref-opacity-num" min="0" max="100"
+                   value="${opPct}" data-id="${layer.id}" style="width:40px">
+          </div>`;
+      } else {
+        div.innerHTML = `
+          <div class="layer-row1">
+            <button class="layer-vis-btn" data-id="${layer.id}" title="Toggle visibility">
+              ${layer.visible ? '👁' : '🚫'}
+            </button>
+            <input class="layer-name" data-id="${layer.id}" value="${escHtml(layer.name)}" title="Double-click to rename">
+            <div class="layer-actions">
+              <button class="layer-action-btn" data-action="dup"   data-id="${layer.id}" title="Duplicate">⧉</button>
+              <button class="layer-action-btn" data-action="merge" data-id="${layer.id}" title="Merge down">⬇</button>
+              <button class="layer-action-btn danger" data-action="del" data-id="${layer.id}" title="Delete">✕</button>
+            </div>
+          </div>`;
+      }
 
       div.querySelector('.layer-row1').insertAdjacentElement('afterbegin', thumb);
       list.appendChild(div);
 
       div.addEventListener('click', (e) => {
         if (e.target.closest('button,input')) return;
-        lm.setActive(layer.id);
+        if (!layer.isReference) lm.setActive(layer.id);
         this.refreshLayerPanel();
       });
 
@@ -506,26 +547,45 @@ export class UIManager {
       nameInput.addEventListener('blur', () => { layer.name = nameInput.value||'Layer'; nameInput.style.pointerEvents='none'; });
       nameInput.addEventListener('keydown', e => { if (e.key==='Enter') nameInput.blur(); });
 
-      div.querySelector('[data-action="dup"]').addEventListener('click', (e) => {
-        e.stopPropagation(); lm.duplicateLayer(layer.id); this.refreshLayerPanel(); this.app.render();
-      });
-      div.querySelector('[data-action="merge"]').addEventListener('click', (e) => {
-        e.stopPropagation(); lm.mergeDown(layer.id); this.refreshLayerPanel(); this.app.render();
-      });
+      if (layer.isReference) {
+        // Opacity slider+number sync
+        const slider = div.querySelector('.ref-opacity-slider');
+        const num    = div.querySelector('.ref-opacity-num');
+        const apply  = v => {
+          v = Math.max(0, Math.min(100, v));
+          layer.opacity = v / 100;
+          slider.value = v;
+          num.value    = v;
+          this.app.render();
+        };
+        slider.addEventListener('input',  () => apply(+slider.value));
+        num.addEventListener('change',    () => apply(+num.value));
+        num.addEventListener('keydown',   e => { if (e.key === 'Enter') apply(+num.value); });
+      } else {
+        div.querySelector('[data-action="dup"]')?.addEventListener('click', (e) => {
+          e.stopPropagation(); lm.duplicateLayer(layer.id); this.refreshLayerPanel(); this.app.render();
+        });
+        div.querySelector('[data-action="merge"]')?.addEventListener('click', (e) => {
+          e.stopPropagation(); lm.mergeDown(layer.id); this.refreshLayerPanel(); this.app.render();
+        });
+      }
+
       div.querySelector('[data-action="del"]').addEventListener('click', (e) => {
         e.stopPropagation(); lm.removeLayer(layer.id); this.refreshLayerPanel(); this.app.render();
       });
 
-      div.setAttribute('draggable', 'true');
-      div.addEventListener('dragstart', (e) => { e.dataTransfer.setData('layerId', layer.id); div.classList.add('dragging'); });
-      div.addEventListener('dragend',   () => div.classList.remove('dragging'));
-      div.addEventListener('dragover',  (e) => e.preventDefault());
-      div.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const srcId  = +e.dataTransfer.getData('layerId');
-        const srcIdx = lm.layers.findIndex(l => l.id === srcId);
-        if (srcIdx !== realIdx) { lm.moveLayer(srcIdx, realIdx); this.refreshLayerPanel(); this.app.render(); }
-      });
+      if (!layer.isReference) {
+        div.setAttribute('draggable', 'true');
+        div.addEventListener('dragstart', (e) => { e.dataTransfer.setData('layerId', layer.id); div.classList.add('dragging'); });
+        div.addEventListener('dragend',   () => div.classList.remove('dragging'));
+        div.addEventListener('dragover',  (e) => e.preventDefault());
+        div.addEventListener('drop', (e) => {
+          e.preventDefault();
+          const srcId  = +e.dataTransfer.getData('layerId');
+          const srcIdx = lm.layers.findIndex(l => l.id === srcId);
+          if (srcIdx !== realIdx) { lm.moveLayer(srcIdx, realIdx); this.refreshLayerPanel(); this.app.render(); }
+        });
+      }
     });
   }
 

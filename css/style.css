@@ -549,6 +549,10 @@ html, body {
   box-shadow: 0 0 0 2px var(--accent-glow);
 }
 .layer-item.dragging { opacity: .4; }
+.layer-item.layer-reference {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--surface2) 0%, #1a1a35 100%);
+}
 
 .layer-row1 { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
 .layer-thumb {

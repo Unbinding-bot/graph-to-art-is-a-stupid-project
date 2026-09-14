@@ -45,20 +45,44 @@ export const EraserTool = createTool({
     const viewYSpan  = cm.view.yMax - cm.view.yMin;
     const radiusWorld = this.opts.eraserSize / cm.H * viewYSpan;
 
-    const toAdd    = [];
-    const toRemove = [];
+    const isHit = (pts) => pts.some(wp =>
+      this._erasedWorld.some(ew => Math.hypot(wp.x - ew.x, wp.y - ew.y) <= radiusWorld)
+    );
+
+    const getPoints = (entry) => {
+      const shape = entry.shape;
+      if (!shape) return [];
+      if (shape.type !== 'static') return getSamplePoints(shape);
+      // Static: use worldPts or previewPoints
+      if (entry.worldPts?.length) return entry.worldPts;
+      if (shape.previewPoints?.length) return shape.previewPoints;
+      // Ellipse: sample perimeter
+      if (entry.isEllipse && entry.cx !== undefined) {
+        return Array.from({length: 32}, (_, i) => {
+          const a = (i / 32) * Math.PI * 2;
+          return { x: entry.cx + entry.rx * Math.cos(a), y: entry.cy + entry.ry * Math.sin(a) };
+        });
+      }
+      return [];
+    };
+
+    const toAdd      = [];
+    const toRemove   = new Set();
+    const hitOutlineKeys = new Set();
 
     for (const entry of layer.shapes) {
-      if (!entry.shape) continue;
-      const pts = getSamplePoints(entry.shape);
+      const pts = getPoints(entry);
+      if (!isHit(pts)) continue;
+
+      toRemove.add(entry.id);
+      if (entry.shapeOutlineKey) hitOutlineKeys.add(entry.shapeOutlineKey);
+
+      // Only try to split non-static brush strokes
+      if (entry.shape?.type === 'static') continue;
 
       const erased = pts.map(wp =>
         this._erasedWorld.some(ew => Math.hypot(wp.x - ew.x, wp.y - ew.y) <= radiusWorld)
       );
-
-      if (!erased.some(Boolean)) continue;
-
-      toRemove.push(entry.id);
 
       let run = [];
       for (let i = 0; i <= pts.length; i++) {
@@ -82,7 +106,14 @@ export const EraserTool = createTool({
       }
     }
 
-    if (!toRemove.length) return;
+    // Cascade: remove all entries sharing a hit shapeOutlineKey
+    for (const entry of layer.shapes) {
+      if (entry.shapeOutlineKey && hitOutlineKeys.has(entry.shapeOutlineKey)) {
+        toRemove.add(entry.id);
+      }
+    }
+
+    if (!toRemove.size) return;
     for (const id of toRemove) layer.removeShape(id);
     for (const info of toAdd) layer.addShape(info.shape, info.mode, info);
     this.app.ui.refreshEquationsPanel();

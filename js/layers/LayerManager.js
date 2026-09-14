@@ -7,11 +7,14 @@ let _layerIdCounter = 0;
 
 export class Layer {
   constructor(name, width = 800, height = 600) {
-    this.id       = _layerIdCounter++;
-    this.name     = name;
-    this.visible  = true;
-    this.shapes   = [];
+    this.id          = _layerIdCounter++;
+    this.name        = name;
+    this.visible     = true;
+    this.shapes      = [];
     this._eqIdCounter = 0;
+    // Reference-layer properties (ignored for normal layers)
+    this.isReference = false;
+    this.opacity     = 1.0;
 
     this.canvas = document.createElement('canvas');
     this.canvas.width  = width;
@@ -71,7 +74,14 @@ export class LayerManager {
   }
 
   get activeLayer() {
-    return this.layers[this.activeIndex] ?? null;
+    const layer = this.layers[this.activeIndex] ?? null;
+    // Never return a reference layer as the active drawing target
+    if (layer?.isReference) {
+      // Find the first non-reference layer
+      const normal = this.layers.find(l => !l.isReference);
+      return normal ?? null;
+    }
+    return layer;
   }
 
   resize(w, h) {
@@ -84,6 +94,35 @@ export class LayerManager {
     this.layers.push(layer);
     this._undoStacks[layer.id] = [];
     this.activeIndex = this.layers.length - 1;
+    this.onChange();
+    return layer;
+  }
+
+  /** Add a reference image layer at the very bottom of the stack. */
+  addReferenceLayer(name, imageData) {
+    const layer = new Layer(name || 'Reference', this.W, this.H);
+    layer.isReference = true;
+    layer.opacity     = 0.5;
+    // Draw the image data onto the layer canvas
+    if (imageData) {
+      const img = new Image();
+      img.onload = () => {
+        // Scale to fit while maintaining aspect ratio
+        const scale = Math.min(layer.canvas.width / img.width, layer.canvas.height / img.height);
+        const w = img.width  * scale;
+        const h = img.height * scale;
+        const x = (layer.canvas.width  - w) / 2;
+        const y = (layer.canvas.height - h) / 2;
+        layer.ctx.drawImage(img, x, y, w, h);
+        this.onChange();
+      };
+      img.src = imageData;
+    }
+    // Insert at index 0 (bottom of stack)
+    this.layers.unshift(layer);
+    this._undoStacks[layer.id] = [];
+    // Shift activeIndex up to keep it pointing at the same layer
+    this.activeIndex = Math.max(0, this.activeIndex + 1);
     this.onChange();
     return layer;
   }

@@ -225,9 +225,17 @@ export class CanvasManager {
     }
 
     // Layer canvases are screen-pixel sized — draw 1:1
+    // Reference layers use their own opacity; normal layers are fully opaque
     for (const layer of layers) {
       if (!layer.visible) continue;
-      ctx.drawImage(layer.canvas, 0, 0);
+      if (layer.isReference && layer.opacity < 1) {
+        ctx.save();
+        ctx.globalAlpha = layer.opacity;
+        ctx.drawImage(layer.canvas, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.drawImage(layer.canvas, 0, 0);
+      }
     }
   }
 

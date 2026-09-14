@@ -175,7 +175,7 @@ class App {
     // paints dabs directly for immediate feedback).
     if (!this.ui.isEqOnlyMode() && !this._brushDrawing) {
       for (const layer of lm.layers) {
-        if (layer.visible) this.redrawRasterFromShapes(layer);
+        if (layer.visible && !layer.isReference) this.redrawRasterFromShapes(layer);
       }
     }
 
@@ -488,19 +488,50 @@ class App {
     const SW = cm.W, SH = cm.H;
     const mask = sel.mask;
 
-    // Remove shapes that are majority inside the mask
-    const toRemove = [];
-    for (const entry of layer.shapes) {
-      if (!entry.shape) continue;
-      const pts = getSamplePoints(entry.shape);
+    const isInsideMask = (worldPtsArr) => {
+      if (!worldPtsArr?.length) return false;
       let inside = 0;
-      for (const wp of pts) {
+      for (const wp of worldPtsArr) {
         const { px, py } = cm.toPixel(wp.x, wp.y);
         const ix = Math.round(px), iy = Math.round(py);
         if (ix >= 0 && ix < SW && iy >= 0 && iy < SH && mask[iy * SW + ix]) inside++;
       }
-      if (pts.length && inside / pts.length > 0.5) toRemove.push(entry.id);
+      return inside / worldPtsArr.length > 0.4;
+    };
+
+    const toRemove = new Set();
+    const hitOutlineKeys = new Set();
+
+    for (const entry of layer.shapes) {
+      // Get representative geometry points — prefer getSamplePoints, fall back to worldPts/previewPoints
+      let pts = [];
+      if (entry.shape && entry.shape.type !== 'static') {
+        pts = getSamplePoints(entry.shape);
+      } else {
+        // Static shapes: use worldPts (render outline) or previewPoints (equation entries)
+        pts = entry.worldPts ?? entry.shape?.previewPoints ?? [];
+        // For ellipses, sample the perimeter
+        if (!pts.length && entry.isEllipse && entry.cx !== undefined) {
+          pts = Array.from({length: 32}, (_, i) => {
+            const a = (i / 32) * Math.PI * 2;
+            return { x: entry.cx + entry.rx * Math.cos(a), y: entry.cy + entry.ry * Math.sin(a) };
+          });
+        }
+      }
+
+      if (isInsideMask(pts)) {
+        toRemove.add(entry.id);
+        if (entry.shapeOutlineKey) hitOutlineKeys.add(entry.shapeOutlineKey);
+      }
     }
+
+    // Also remove all entries sharing a hitOutlineKey (linked equation entries)
+    for (const entry of layer.shapes) {
+      if (entry.shapeOutlineKey && hitOutlineKeys.has(entry.shapeOutlineKey)) {
+        toRemove.add(entry.id);
+      }
+    }
+
     for (const id of toRemove) layer.removeShape(id);
 
     clearSelection(this);
