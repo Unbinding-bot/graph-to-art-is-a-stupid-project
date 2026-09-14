@@ -552,51 +552,50 @@ export class UIManager {
   // ── Mobile UI ─────────────────────────────────────────────────────────────
 
   _initMobile() {
-    // Always wire mobile UI — CSS handles show/hide
-
-    // ── Toolstrip: clone toolbar buttons into #mobile-toolstrip ──
+    // Build toolstrip without cloning — fresh buttons with data-tool attributes
     const toolstrip = document.getElementById('mobile-toolstrip');
-    const toolbar   = document.getElementById('toolbar');
-    if (toolstrip && toolbar) {
-      toolstrip.innerHTML = toolbar.innerHTML;
-      // Wire cloned tool buttons
-      toolstrip.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
-        btn.addEventListener('click', () => this.app.toolManager.activate(btn.dataset.tool));
+    if (toolstrip) {
+      // Copy SVG icon content from each existing toolbar button
+      document.querySelectorAll('#toolbar .tool-btn[data-tool]').forEach(src => {
+        const btn = document.createElement('button');
+        btn.className = src.className;
+        btn.dataset.tool = src.dataset.tool;
+        btn.innerHTML = src.innerHTML;
+        btn.addEventListener('click', () => this.app.toolManager.activate(src.dataset.tool));
+        toolstrip.appendChild(btn);
       });
-      // Wire cloned swatch buttons
-      toolstrip.querySelector('#swatch-fg')?.addEventListener('click', (e) => {
+
+      // Add separators and color swatches at the end
+      const sep = document.createElement('div'); sep.className = 'tool-sep'; toolstrip.appendChild(sep);
+
+      // Foreground swatch
+      const fgBtn = document.createElement('div');
+      fgBtn.className = 'tool-btn';
+      fgBtn.style.cssText = 'position:relative;width:44px;height:44px';
+      fgBtn.innerHTML = `
+        <div style="position:absolute;width:22px;height:22px;top:4px;left:4px;border:2px solid var(--text);border-radius:5px;background:${this.app.foreColor};cursor:pointer;z-index:1" id="m-swatch-fg"></div>
+        <div style="position:absolute;width:22px;height:22px;bottom:4px;right:4px;border:2px solid var(--surface2);border-radius:5px;background:${this.app.backColor};cursor:pointer" id="m-swatch-bg"></div>`;
+      fgBtn.querySelector('#m-swatch-fg')?.addEventListener('click', e => {
         this.app._pickingBg = false;
-        this.app.colorPicker.setHex(this.app.foreColor);
         this.app.colorPicker.open(this.app.foreColor, e.currentTarget);
-        this._updateSwatchActiveState();
       });
-      toolstrip.querySelector('#swatch-bg')?.addEventListener('click', (e) => {
+      fgBtn.querySelector('#m-swatch-bg')?.addEventListener('click', e => {
         this.app._pickingBg = true;
-        this.app.colorPicker.setHex(this.app.backColor);
         this.app.colorPicker.open(this.app.backColor, e.currentTarget);
-        this._updateSwatchActiveState();
       });
-      toolstrip.querySelector('#swap-colors-btn')?.addEventListener('click', () => {
-        const tmp = this.app.foreColor;
-        this.app.setForeColor(this.app.backColor);
-        this.app.setBackColor(tmp);
-      });
-      toolstrip.querySelector('#reset-colors-btn')?.addEventListener('click', () => {
-        this.app.setForeColor('#ffffff');
-        this.app.setBackColor('#000000');
-      });
+      toolstrip.appendChild(fgBtn);
     }
 
-    // ── Bottom nav: open/close sheet sections ──
+    // ── Bottom nav sheet toggling ──
     const sheet = document.getElementById('mobile-sheet');
     let activeNavBtn = null;
+
     document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const section = btn.dataset.sheet;
         const isOpen  = sheet?.classList.contains('open');
         const isSame  = activeNavBtn === btn;
 
-        // Toggle sheet closed if same tab tapped again
         if (isOpen && isSame) {
           sheet?.classList.remove('open');
           btn.classList.remove('active');
@@ -604,7 +603,6 @@ export class UIManager {
           return;
         }
 
-        // Switch section
         document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.mobile-sheet-section').forEach(s => s.classList.remove('active'));
         btn.classList.add('active');
@@ -612,7 +610,6 @@ export class UIManager {
         sheet?.classList.add('open');
         activeNavBtn = btn;
 
-        // Refresh live content when opening
         if (section === 'layers')    this._refreshMobileLayers();
         if (section === 'equations') this._refreshMobileEquations();
         if (section === 'tools')     this._refreshMobileToolOpts();
@@ -624,7 +621,7 @@ export class UIManager {
     if (handle && sheet) {
       let ty0 = 0;
       handle.addEventListener('touchstart', e => { ty0 = e.touches[0].clientY; }, { passive: true });
-      handle.addEventListener('touchend',   e => {
+      handle.addEventListener('touchend', e => {
         if (e.changedTouches[0].clientY - ty0 > 50) {
           sheet.classList.remove('open');
           document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
@@ -633,92 +630,77 @@ export class UIManager {
       }, { passive: true });
     }
 
-    // ── Embed inline color picker into the mobile color section ──
-    const mobilePicker = document.getElementById('mobile-color-picker');
-    if (mobilePicker) {
-      this.app.colorPicker.embedIn(mobilePicker);
-    }
-    // Sync FG/BG dots in mobile color section
-    document.getElementById('mobile-color-target-fg')?.addEventListener('click', () => {
-      this.app._pickingBg = false;
-      this._updateSwatchActiveState();
-    });
-    document.getElementById('mobile-color-target-bg')?.addEventListener('click', () => {
-      this.app._pickingBg = true;
-      this._updateSwatchActiveState();
-    });
-
-    // ── Options section buttons ──
+    // ── Options buttons ──
     document.getElementById('mobile-zoom-reset-btn')?.addEventListener('click', () => {
       const cm = this.app.canvasManager;
       cm.view = { xMin: -10, xMax: 10, yMin: -10, yMax: 10 };
       cm.resize(); this.app.render();
     });
-    document.getElementById('mobile-save-btn')?.addEventListener('click', () => this.app.fileManager.save());
-    document.getElementById('mobile-load-btn')?.addEventListener('click', () => document.getElementById('load-input').click());
+    document.getElementById('mobile-save-btn')?.addEventListener('click',   () => this.app.fileManager.save());
+    document.getElementById('mobile-load-btn')?.addEventListener('click',   () => document.getElementById('load-input').click());
     document.getElementById('mobile-export-btn')?.addEventListener('click', () => this.app.fileManager.exportPNG());
-    document.getElementById('mobile-undo-btn')?.addEventListener('click', () => {
-      this.app.layerManager.undo(); this.refreshEquationsPanel(); this.app.render();
-    });
-    document.getElementById('mobile-redo-btn')?.addEventListener('click', () => {
-      this.app.layerManager.redo(); this.refreshEquationsPanel(); this.app.render();
-    });
+    document.getElementById('mobile-undo-btn')?.addEventListener('click',   () => { this.app.layerManager.undo(); this.refreshEquationsPanel(); this.app.render(); });
+    document.getElementById('mobile-redo-btn')?.addEventListener('click',   () => { this.app.layerManager.redo(); this.refreshEquationsPanel(); this.app.render(); });
 
-    // Fit checkboxes — keep in sync with desktop
+    // Fit checkboxes sync
     ['Linear','Quad','Cubic','Circle'].forEach(name => {
-      const mobileEl  = document.getElementById(`mobile-chk${name}`);
-      const desktopEl = document.getElementById(`chk${name}`);
-      mobileEl?.addEventListener('change', e => {
+      document.getElementById(`mobile-chk${name}`)?.addEventListener('change', e => {
         this.app.fitOptions[name.toLowerCase()] = e.target.checked;
-        if (desktopEl) desktopEl.checked = e.target.checked;
+        const d = document.getElementById(`chk${name}`);
+        if (d) d.checked = e.target.checked;
         this.refreshEquationsPanel();
       });
     });
 
-    // ── Mobile equations buttons ──
-    const worldRange = () => this.app.canvasManager.view.xMax - this.app.canvasManager.view.xMin;
-    document.getElementById('mobile-eq-copy-all-btn')?.addEventListener('click', () => {
-      document.getElementById('eq-copy-all-btn')?.click();
-    });
-    document.getElementById('mobile-eq-only-btn')?.addEventListener('click', () => {
-      document.getElementById('eq-only-btn')?.click();
-    });
+    // Equations copy buttons delegate to desktop equivalents
+    document.getElementById('mobile-eq-copy-all-btn')?.addEventListener('click', () => document.getElementById('eq-copy-all-btn')?.click());
+    document.getElementById('mobile-eq-only-btn')?.addEventListener('click',     () => document.getElementById('eq-only-btn')?.click());
 
-    // ── Layer add ──
+    // Layer add
     document.getElementById('mobile-layer-add-btn')?.addEventListener('click', () => {
-      this.app.layerManager.addLayer();
-      this._refreshMobileLayers();
-      this.app.render();
+      this.app.layerManager.addLayer(); this._refreshMobileLayers(); this.app.render();
     });
 
-    // Keep toolstrip active state in sync
-    const origSetActive = this.setActiveTool.bind(this);
+    // Keep toolstrip active state in sync via setActiveTool override
+    const _origSetActive = this.setActiveTool.bind(this);
     this.setActiveTool = (name) => {
-      origSetActive(name);
-      toolstrip?.querySelectorAll('.tool-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tool === name);
+      _origSetActive(name);
+      toolstrip?.querySelectorAll('.tool-btn[data-tool]').forEach(b => {
+        b.classList.toggle('active', b.dataset.tool === name);
       });
       this._refreshMobileToolOpts();
+    };
+
+    // Sync swatch colors when foreColor/backColor change
+    const _origSetFore = this.app.setForeColor.bind(this.app);
+    this.app.setForeColor = (hex) => {
+      _origSetFore(hex);
+      const el = document.getElementById('m-swatch-fg');
+      if (el) el.style.background = hex;
+    };
+    const _origSetBack = this.app.setBackColor.bind(this.app);
+    this.app.setBackColor = (hex) => {
+      _origSetBack(hex);
+      const el = document.getElementById('m-swatch-bg');
+      if (el) el.style.background = hex;
     };
   }
 
   _refreshMobileToolOpts() {
-    const mount  = document.getElementById('mobile-tool-opts-mount');
-    const source = document.getElementById('panel-tool-opts');
-    if (!mount || !source) return;
-    // Show the active tool's options group inside the mobile sheet
+    const mount = document.getElementById('mobile-tool-opts-mount');
+    if (!mount) return;
     mount.innerHTML = '';
     const toolName = this.app.toolManager.currentName;
-    const group = source.querySelector(`.panel-opts-group[data-panel-opts="${toolName}"]`);
-    if (group) {
-      const clone = group.cloneNode(true);
+    const header   = document.createElement('div');
+    header.style.cssText = 'font-size:10px;font-weight:700;color:var(--accent-hi);letter-spacing:.08em;text-transform:uppercase;padding:4px 0 10px';
+    header.textContent   = document.getElementById('tool-name-label')?.textContent ?? '';
+    mount.appendChild(header);
+    const src = document.querySelector(`#panel-tool-opts .panel-opts-group[data-panel-opts="${toolName}"]`);
+    if (src) {
+      const clone = src.cloneNode(true);
       clone.style.display = 'flex';
       mount.appendChild(clone);
     }
-    const header = document.createElement('div');
-    header.style.cssText = 'font-size:10px;font-weight:700;color:var(--accent-hi);letter-spacing:.08em;text-transform:uppercase;padding:4px 0 10px';
-    header.textContent = document.getElementById('tool-name-label')?.textContent ?? '';
-    mount.prepend(header);
   }
 
   _refreshMobileLayers() {
