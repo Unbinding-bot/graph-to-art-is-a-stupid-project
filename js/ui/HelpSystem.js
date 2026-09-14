@@ -51,13 +51,42 @@ const TOUR_STEPS = [
     selector: '.panel-tab[data-panel="equations"]',
     side: 'left',
     title: 'Equations tab',
-    body: 'Every stroke and shape you draw shows up here. Hit D to copy one equation for Desmos, G for GeoGebra. The Desmos button at the top copies everything at once. The GeoGebra button downloads a .ggb file you can just open directly.',
+    body: 'Click here to see every equation your drawing has produced. Let me open it for you now.',
+    onEnter() {
+      // Switch the panel bottom half to the equations tab
+      document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel-section').forEach(s => s.classList.remove('active'));
+      const tab = document.querySelector('.panel-tab[data-panel="equations"]');
+      const sec = document.querySelector('.panel-section[data-section="equations"]');
+      tab?.classList.add('active');
+      sec?.classList.add('active');
+    },
+  },
+  {
+    selector: '#equations-list',
+    side: 'left',
+    title: 'Your equations',
+    body: 'Each stroke and shape you drew shows up here. They update live as you draw. If the list is empty, go draw something first and come back.',
+  },
+  {
+    selector: '.eq-panel-actions',
+    side: 'left',
+    title: 'Copy buttons',
+    body: 'Desmos copies all your equations at once so you can paste them straight into desmos.com. GeoGebra downloads a .ggb file you just open in GeoGebra Classic. Each individual equation also has its own D and G buttons.',
   },
   {
     selector: '.panel-tab[data-panel="layers"]',
     side: 'left',
     title: 'Layers tab',
     body: 'Add new layers, hide or show them, drag to reorder, duplicate or merge. Reference layers show up with an opacity slider so you can fade them out while you work.',
+    onEnter() {
+      document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel-section').forEach(s => s.classList.remove('active'));
+      const tab = document.querySelector('.panel-tab[data-panel="layers"]');
+      const sec = document.querySelector('.panel-section[data-section="layers"]');
+      tab?.classList.add('active');
+      sec?.classList.add('active');
+    },
   },
   {
     selector: '.panel-tab[data-panel="fit"]',
@@ -221,6 +250,9 @@ export class HelpSystem {
   _showTourStep() {
     const step = TOUR_STEPS[this._tourIdx];
     const el   = document.querySelector(step.selector);
+
+    // Run any setup the step needs (e.g. opening a tab)
+    if (step.onEnter) step.onEnter();
 
     // Update tooltip text
     if (this._tipTitle) this._tipTitle.textContent = step.title;
