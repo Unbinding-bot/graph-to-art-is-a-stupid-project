@@ -125,6 +125,9 @@
        OPTIONS BAR (top)
   ═══════════════════════════════════════════════════════════════ -->
   <div id="options-bar">
+    <!-- Help button (left) -->
+    <button class="opt-btn" id="help-btn" title="Help & Tour">?</button>
+    <div class="opt-sep"></div>
 
     <!-- Selection actions (shown when there's an active selection) -->
     <div id="selection-actions" style="display:none;align-items:center;gap:8px;margin-left:auto">
@@ -388,7 +391,202 @@
 
 </div>
 
-<!-- Color picker popup (positioned absolutely by JS) -->
+<!-- ═══════════════════════════════════════════════════════════════
+     HELP MODAL
+═══════════════════════════════════════════════════════════════ -->
+<div id="help-overlay">
+  <div id="help-modal">
+    <!-- Header -->
+    <div id="help-header">
+      <div id="help-tabs">
+        <button class="help-tab active" data-tab="0">Getting Started</button>
+        <button class="help-tab" data-tab="1">Drawing &amp; Tools</button>
+        <button class="help-tab" data-tab="2">Equations</button>
+        <button class="help-tab" data-tab="3">Layers &amp; Reference</button>
+        <button class="help-tab" data-tab="4">Export</button>
+      </div>
+      <button id="help-close">✕</button>
+    </div>
+
+    <!-- Pages -->
+    <div id="help-body">
+
+      <!-- PAGE 0: Getting Started -->
+      <div class="help-page active" data-page="0">
+        <h2>Hey, welcome to MathDraw ✏️</h2>
+        <p class="help-lead">You draw stuff on a math grid, and every stroke you make gets turned into a real equation that works in Desmos or GeoGebra. That's basically it. Here's what you need to know to get going.</p>
+        <div class="help-grid">
+          <div class="help-card">
+            <div class="help-card-icon">✏️</div>
+            <strong>Just start drawing</strong>
+            <p>Pick the Brush and draw anything. Each stroke gets fitted to a curve automatically. You don't have to do anything special.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-icon">ƒ(x)</div>
+            <strong>Get your equations</strong>
+            <p>Open the Equations tab on the right. Every stroke shows up there. Hit the D button next to any equation to copy it for Desmos, or export everything as a GeoGebra file.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-icon">🔍</div>
+            <strong>Moving around</strong>
+            <p>Scroll to zoom. Hold Space and drag to pan. On mobile, pinch to zoom and use two fingers to move around. Hit the Default View button up top to snap back to the center.</p>
+          </div>
+          <div class="help-card">
+            <div class="help-card-icon">⌖</div>
+            <strong>Lost your drawing?</strong>
+            <p>Press Ctrl+A to select everything, then click Go to Selection in the top bar. It'll zoom straight to where your art is.</p>
+          </div>
+        </div>
+        <div class="help-tour-prompt">
+          <button id="help-start-tour">▶ Show me around</button>
+          <span>walks you through each part of the screen</span>
+        </div>
+      </div>
+
+      <!-- PAGE 1: Drawing & Tools -->
+      <div class="help-page" data-page="1">
+        <h2>Drawing and tools</h2>
+        <div class="help-section">
+          <h3>Brush <kbd>B</kbd></h3>
+          <p>Your main drawing tool. Adjust the size in the right panel. Keep Auto-fit stroke checked and every stroke becomes an equation. Turn it off if you just want to sketch something without generating equations.</p>
+        </div>
+        <div class="help-section">
+          <h3>Eraser <kbd>E</kbd></h3>
+          <p>Wipes out the stroke and its equation at the same time. If you erase through the middle of a line it splits into two separate curves, each with its own equation.</p>
+        </div>
+        <div class="help-section">
+          <h3>Shapes <kbd>R</kbd> <kbd>C</kbd> <kbd>O</kbd></h3>
+          <p>Rectangle, circle or ellipse, and polygon. Each one gives you a clean equation right away. Check Fill in the tool options to also get a shaded inequality version of the shape.</p>
+        </div>
+        <div class="help-section">
+          <h3>Fill <kbd>G</kbd></h3>
+          <p>Click inside any closed shape and it fills that area with a solid Desmos inequality. Click somewhere empty and it splits the whole canvas into two halves at that y position, one region above and one below.</p>
+        </div>
+        <div class="help-section">
+          <h3>Edit Points <kbd>V</kbd></h3>
+          <p>Switch to this after drawing and drag the dots on any stroke to reshape it. The equation in the panel updates as you move things.</p>
+        </div>
+        <div class="help-section">
+          <h3>Selection tools <kbd>W</kbd> <kbd>L</kbd> <kbd>P</kbd></h3>
+          <p>Magic Wand, Lasso, and Polygonal Lasso. Use these to select an area then move, delete, or fit equations to it. While placing points with the Polygonal Lasso or Polygon tool, Ctrl+Z removes the last point you placed, Esc cancels the whole thing, and Enter or double-click finishes it.</p>
+        </div>
+      </div>
+
+      <!-- PAGE 2: Equations -->
+      <div class="help-page" data-page="2">
+        <h2>Equations and exporting</h2>
+        <div class="help-section">
+          <h3>The Equations panel</h3>
+          <p>Open the Equations tab at the bottom of the right panel. Every shape you draw shows up here. Each equation line has two buttons next to it:</p>
+          <ul class="help-list">
+            <li><strong>D</strong> copies that equation for Desmos. Paste it straight into desmos.com/calculator.</li>
+            <li><strong>G</strong> copies the GeoGebra version of that one equation.</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h3>Copying everything for Desmos</h3>
+          <p>Click the Desmos button at the top of the Equations tab to grab all equations at once. Then go to Desmos, click any empty expression box, and paste. All your equations load in one shot.</p>
+        </div>
+        <div class="help-section">
+          <h3>Exporting to GeoGebra</h3>
+          <p>Click GeoGebra to download a .ggb file. Open it in GeoGebra Classic on desktop or at geogebra.org/classic. All your equations load straight in, no pasting needed.</p>
+          <p class="help-note">GeoGebra needs explicit multiplication between an exponent and a variable, like ^2*t instead of ^2t. The export fixes this for you automatically so you don't need to worry about it.</p>
+        </div>
+        <div class="help-section">
+          <h3>Fit types</h3>
+          <p>Head to the Fit tab to choose what kinds of equations your freehand strokes get fitted to: lines, quadratics, cubics, or circles. Cubic is the default and works well for most drawings. Unchecking cubic uses more simpler pieces to cover the same stroke.</p>
+        </div>
+        <div class="help-section">
+          <h3>Eq. Only mode</h3>
+          <p>The Eq. Only button hides the painted preview and shows just the vector outlines. Good for checking what your art will actually look like when pasted into Desmos.</p>
+        </div>
+      </div>
+
+      <!-- PAGE 3: Layers & Reference -->
+      <div class="help-page" data-page="3">
+        <h2>Layers and reference images</h2>
+        <div class="help-section">
+          <h3>Layers</h3>
+          <p>Open the Layers tab. You can add as many drawing layers as you want, toggle each one on or off, drag them to reorder, merge two together, or duplicate one. Each layer has its own equations in the panel.</p>
+        </div>
+        <div class="help-section">
+          <h3>Reference images</h3>
+          <p>Click the Reference button in the top bar and pick any image file. It loads as a special layer pinned to the bottom of the stack. A few things worth knowing:</p>
+          <ul class="help-list">
+            <li>It always sits below your drawing layers so it won't cover your work.</li>
+            <li>It has an opacity slider in the layers panel. Drop it to around 20-30% so you can see your strokes clearly on top.</li>
+            <li>You can't draw on reference layers. They're just there to trace over.</li>
+            <li>They show a REF tag in the layers panel so you can tell them apart.</li>
+          </ul>
+          <p>The whole point is you load a sketch or photo, fade it out, then trace over it with the Brush to turn it into Desmos equations.</p>
+        </div>
+        <div class="help-section">
+          <h3>Undo and redo</h3>
+          <p>Ctrl+Z and Ctrl+Y work per layer, up to 30 steps back. One thing that's different: while you're placing points with the Polygon tool or Polygonal Lasso, Ctrl+Z removes the last point you placed rather than undoing the whole layer. Once you commit the shape, Ctrl+Z undoes the whole thing as normal.</p>
+        </div>
+      </div>
+
+      <!-- PAGE 4: Save & Export -->
+      <div class="help-page" data-page="4">
+        <h2>Saving and keyboard shortcuts</h2>
+        <div class="help-section">
+          <h3>Auto-save</h3>
+          <p>Your work saves to your browser automatically every couple of seconds. If you close the tab and come back, it'll restore where you left off. Nothing to set up.</p>
+        </div>
+        <div class="help-section">
+          <h3>Save as .mathart <kbd>Ctrl+S</kbd></h3>
+          <p>Downloads a file with all your layers, equations, and view position saved. Open it back up with the Open button or Ctrl+O. Good if you want to back up your work or move it to another device.</p>
+        </div>
+        <div class="help-section">
+          <h3>Export PNG <kbd>Ctrl+E</kbd></h3>
+          <p>Saves a flat image of what's on screen right now. Useful for sharing a preview of your drawing.</p>
+        </div>
+        <div class="help-section">
+          <h3>Keyboard shortcuts</h3>
+          <table class="help-table">
+            <tr><td><kbd>B</kbd> <kbd>E</kbd> <kbd>G</kbd> <kbd>V</kbd></td><td>Brush, Eraser, Fill, Edit Points</td></tr>
+            <tr><td><kbd>I</kbd> <kbd>W</kbd> <kbd>L</kbd> <kbd>P</kbd></td><td>Eyedropper, Wand, Lasso, Polygonal Lasso</td></tr>
+            <tr><td><kbd>R</kbd> <kbd>C</kbd> <kbd>O</kbd></td><td>Rectangle, Circle, Polygon</td></tr>
+            <tr><td><kbd>[ ]</kbd></td><td>Shrink or grow the brush</td></tr>
+            <tr><td><kbd>X</kbd></td><td>Swap foreground and background color</td></tr>
+            <tr><td><kbd>Ctrl+Z</kbd> <kbd>Ctrl+Y</kbd></td><td>Undo and redo</td></tr>
+            <tr><td><kbd>Ctrl+A</kbd></td><td>Select everything</td></tr>
+            <tr><td><kbd>Delete</kbd></td><td>Delete what's selected</td></tr>
+            <tr><td><kbd>Space</kbd> + drag</td><td>Pan around the canvas</td></tr>
+            <tr><td>Scroll or pinch</td><td>Zoom in and out</td></tr>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /help-body -->
+
+    <!-- Footer nav -->
+    <div id="help-footer">
+      <button id="help-prev">← Prev</button>
+      <div id="help-dots"></div>
+      <button id="help-next">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TOUR OVERLAY
+═══════════════════════════════════════════════════════════════ -->
+<div id="tour-overlay" style="display:none">
+  <div id="tour-spotlight"></div>
+  <div id="tour-tooltip">
+    <div id="tour-tip-title"></div>
+    <div id="tour-tip-body"></div>
+    <div id="tour-tip-footer">
+      <span id="tour-step-counter"></span>
+      <div style="display:flex;gap:8px">
+        <button id="tour-skip">Skip tour</button>
+        <button id="tour-prev-btn">←</button>
+        <button id="tour-next-btn">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="color-picker-popup"></div>
 
 <!-- ═══════════════════════════════════════════════════════════════

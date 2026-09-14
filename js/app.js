@@ -9,6 +9,7 @@ import { ToolManager }     from './tools/ToolManager.js';
 import { UIManager }       from './ui/UIManager.js';
 import { FileManager }     from './file/FileManager.js';
 import { ColorPicker }     from './ui/ColorPicker.js';
+import { HelpSystem }      from './ui/HelpSystem.js';
 import { vectorizeStroke, deriveEquations, getSamplePoints } from './math/FittingPipeline.js';
 import { BrushTool }       from './tools/BrushTool.js';
 import { EraserTool }      from './tools/EraserTool.js';
@@ -154,6 +155,9 @@ class App {
     this.setForeColor('#ffffff');
     this.setBackColor('#000000');
     this.render();
+
+    // Help system — shown on first open
+    this.helpSystem = new HelpSystem();
 
     // Auto-save restore
     this.fileManager.loadAutosave().then(restored => {
