@@ -952,11 +952,12 @@ html, body {
     gap: 1px;
     overflow-x: auto;
     scrollbar-width: none;
-    z-index: 90;
+    z-index: 200;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
   }
   #mobile-toolstrip::-webkit-scrollbar { display: none; }
-  #mobile-toolstrip .tool-btn { width: 44px; height: 44px; flex-shrink: 0; }
+  #mobile-toolstrip .tool-btn { width: 44px; height: 44px; flex-shrink: 0; touch-action: manipulation; }
   #mobile-toolstrip .tool-btn svg { width: 20px; height: 20px; }
   #mobile-toolstrip .tool-sep { width: 1px; height: 26px; margin: 0 2px; flex-shrink: 0; }
   #mobile-toolstrip #color-swatches { width: 44px; height: 44px; flex-shrink: 0; margin: 0 2px; }
@@ -970,7 +971,8 @@ html, body {
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: var(--surface);
     border-top: 1px solid var(--border);
-    z-index: 100;
+    z-index: 200;
+    touch-action: manipulation;
   }
 
   .mobile-nav-btn {
@@ -996,6 +998,7 @@ html, body {
   .mobile-nav-btn svg { width: 22px; height: 22px; }
   .mobile-nav-btn.active { color: var(--accent-hi); }
   .mobile-nav-btn:active { background: var(--surface2); }
+  .mobile-nav-btn { touch-action: manipulation; }
 
   /* ── Bottom sheet ── */
   #mobile-sheet {
@@ -1009,7 +1012,7 @@ html, body {
     border-top: 1px solid var(--border);
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -8px 40px rgba(0,0,0,.65);
-    z-index: 99;
+    z-index: 199;
     transform: translateY(calc(100% + 2px));
     transition: transform .28s cubic-bezier(.4,0,.2,1);
     overflow: hidden;

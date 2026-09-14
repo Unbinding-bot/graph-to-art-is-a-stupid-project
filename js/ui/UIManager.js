@@ -18,6 +18,120 @@ const TOOL_NAMES = {
   editpoints: 'Edit Points',
 };
 
+/**
+ * Convert a single Desmos expression string to GeoGebra syntax.
+ *
+ * Handles:
+ *  - Parametric Bézier curves: ((expr),(expr)) → Curve(x,y,t,0,1)
+ *  - Line equations with domain restriction: y=mx+b\{a≤x≤b\} → Segment
+ *  - Vertical lines: x=a\{y1≤y≤y2\} → Segment
+ *  - Inequality regions: lo<y<hi\{x0≤x≤x1\} → Polygon (filled rect)
+ *  - Circle/ellipse: (x-h)²+(y-k)²=r² → Circle / Ellipse GeoGebra commands
+ *  - Ellipse standard form: (x-h)²/a²+(y-k)²/b²=1 → Ellipse command
+ *  - Half-plane inequalities: y>c, y<c, y≥c, y≤c → stays as-is (GeoGebra accepts)
+ */
+function desmosToGeoGebra(desmos) {
+  if (!desmos) return '';
+
+  // ── Strip LaTeX formatting ─────────────────────────────────────────────
+  let s = desmos
+    .replace(/\^\{(\d+)\}/g, '^$1')       // x^{2} → x^2
+    .replace(/\\left\\{/g, '{')            // \left\{ → {
+    .replace(/\\right\\}/g, '}')           // \right\} → }
+    .replace(/\\le/g, '<=')               // \le → <=
+    .replace(/\\ge/g, '>=')               // \ge → >=
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)') // \frac{a}{b} → (a)/(b)
+    .replace(/\\\\/g, '');                  // stray backslashes
+
+  // ── Parametric curve: ((x-expr),(y-expr)) ─────────────────────────────
+  // Desmos: ((1-t)^3*A+..., (1-t)^3*B+...)
+  const paramMatch = s.match(/^\(\s*(.+)\s*,\s*(.+)\s*\)$/);
+  if (paramMatch) {
+    let xExpr = paramMatch[1].trim();
+    let yExpr = paramMatch[2].trim();
+    // Wrap negative literals after * so GeoGebra doesn't choke: *-8 → *(-8)
+    const fixNegs = e => e.replace(/\*(-\d+\.?\d*)/g, '*($1)');
+    // Insert explicit * wherever implicit multiplication would be ambiguous:
+    //   (1-t)^2t  → (1-t)^2*t   (digit-exponent followed by 't')
+    //   3(1-t)    → 3*(1-t)     (digit followed by open paren)
+    //   )t        → )*t         (closing paren followed by 't')
+    //   )(         → )*(         (closing paren followed by open paren)
+    const fixImpl = e => e
+      .replace(/(\d)t/g, '$1*t')        // 2t → 2*t  (covers ^2t → ^2*t)
+      .replace(/(\d)\(/g, '$1*(')       // 3( → 3*(
+      .replace(/\)\(/g, ')*(')          // )( → )*(
+      .replace(/\)t/g, ')*t');          // )t → )*t
+    xExpr = fixImpl(fixNegs(xExpr));
+    yExpr = fixImpl(fixNegs(yExpr));
+    return `Curve(${xExpr}, ${yExpr}, t, 0, 1)`;
+  }
+
+  // ── Circle: (x-h)^2+(y-k)^2=r^2 ──────────────────────────────────────
+  const circleEq = s.match(/^\(x([+-]\d+\.?\d*)?\)?\^2\+\(y([+-]\d+\.?\d*)?\)?\^2=(\d+\.?\d*)$/);
+  if (circleEq) {
+    const h  = circleEq[1] ? -parseFloat(circleEq[1]) : 0;
+    const k  = circleEq[2] ? -parseFloat(circleEq[2]) : 0;
+    const r2 = parseFloat(circleEq[3]);
+    const r  = Math.sqrt(r2).toFixed(4);
+    return `Circle((${h},${k}),${r})`;
+  }
+
+  // ── Ellipse: (x-h)^2/a^2+(y-k)^2/b^2=1 ───────────────────────────────
+  const ellipseEq = s.match(/^\(x([+-]\d+\.?\d*)?\)?\^2\/(\d+\.?\d*)\+\(y([+-]\d+\.?\d*)?\)?\^2\/(\d+\.?\d*)=1$/);
+  if (ellipseEq) {
+    const h  = ellipseEq[1] ? -parseFloat(ellipseEq[1]) : 0;
+    const a  = Math.sqrt(parseFloat(ellipseEq[2])).toFixed(4);
+    const k  = ellipseEq[3] ? -parseFloat(ellipseEq[3]) : 0;
+    const b  = Math.sqrt(parseFloat(ellipseEq[4])).toFixed(4);
+    // GeoGebra Ellipse needs two foci + semi-major — easier to use implicit form
+    // Implicit: (x-h)^2/a^2+(y-k)^2/b^2=1 — GeoGebra CAS accepts this directly
+    return `(x${h>=0?'-'+h:'+'+(-h)})^2/${(+a*+a).toFixed(4)}+(y${k>=0?'-'+k:'+'+(-k)})^2/${(+b*+b).toFixed(4)}=1`;
+  }
+
+  // ── Domain-restricted line/segment ────────────────────────────────────
+  // Pattern: y=mx+b{x0<=x<=x1} or x=a{y0<=y<=y1}
+  const domainMatch = s.match(/^(.+)\{(.+)<=(.+)<=(.+)\}$/);
+  if (domainMatch) {
+    const expr   = domainMatch[1].trim();
+    const lo     = domainMatch[2].trim();
+    const hi     = domainMatch[4].trim();
+
+    // Vertical line: x=a{y0<=y<=y1}
+    const vertMatch = expr.match(/^x=(-?\d+\.?\d*)$/);
+    if (vertMatch) {
+      const x = vertMatch[1];
+      return `Segment((${x},${lo}),(${x},${hi}))`;
+    }
+
+    // Horizontal or sloped line: y=mx+b{x0<=x<=x1}
+    const lineMatch = expr.match(/^y=(.+)$/);
+    if (lineMatch) {
+      // Evaluate y at x=lo and x=hi by substituting
+      const evalLine = (xVal, expr) => {
+        try { return Function('x', `return ${expr.replace(/(\d)(x)/g,'$1*$2')}`)( parseFloat(xVal) ).toFixed(4); }
+        catch { return '0'; }
+      };
+      const lineExpr = lineMatch[1];
+      const y0 = evalLine(lo, lineExpr);
+      const y1 = evalLine(hi, lineExpr);
+      return `Segment((${lo},${y0}),(${hi},${y1}))`;
+    }
+  }
+
+  // ── Filled rectangle inequality: lo<y<hi{x0<x<x1} ────────────────────
+  const fillMatch = s.match(/^(-?\d+\.?\d*)<y<(-?\d+\.?\d*)\{(-?\d+\.?\d*)<x<(-?\d+\.?\d*)\}$/);
+  if (fillMatch) {
+    const [,y0,y1,x0,x1] = fillMatch;
+    return `Polygon((${x0},${y0}),(${x1},${y0}),(${x1},${y1}),(${x0},${y1}))`;
+  }
+
+  // ── Half-plane inequalities: GeoGebra accepts these natively ─────────
+  if (/^y[<>]=?\d/.test(s) || /^y[<>]=?-\d/.test(s)) return s;
+
+  // ── Fallback: return as-is (may or may not work in GeoGebra) ──────────
+  return s;
+}
+
 export class UIManager {
   constructor(app) {
     this.app = app;
@@ -72,20 +186,18 @@ export class UIManager {
       this.app.render();
     });
 
-    // Copy all equations
-    document.getElementById('eq-copy-all-btn')?.addEventListener('click', () => {
-      const worldRange = this.app.canvasManager.view.xMax - this.app.canvasManager.view.xMin;
-      const all = this.app.layerManager.layers
-        .flatMap(l => l.shapes)
-        .filter(e => e.visible)
-        .flatMap(e => e.mode === 'inequality'
-          ? deriveInequality(e.shape, this.app.fitOptions, worldRange)
-          : deriveEquations(e.shape, this.app.fitOptions, worldRange))
-        .map(eq => eq.desmos)
-        .filter(d => d)
-        .join('\n');
-      if (!all) { this._flash('Nothing to copy'); return; }
-      navigator.clipboard.writeText(all).then(() => this._flash('Copied!'));
+    // Copy all equations — Desmos format
+    document.getElementById('eq-copy-desmos-btn')?.addEventListener('click', () => {
+      const lines = this._collectDesmos();
+      if (!lines.length) { this._flash('Nothing to copy'); return; }
+      this._copyText(lines.join('\n'), 'Copied for Desmos!');
+    });
+
+    // Copy all equations — GeoGebra format
+    document.getElementById('eq-copy-geo-btn')?.addEventListener('click', () => {
+      const geoExprs = this._collectDesmos().map(desmosToGeoGebra).filter(Boolean);
+      if (!geoExprs.length) { this._flash('Nothing to export'); return; }
+      this._exportGGBFile(geoExprs);
     });
 
     // File operations
@@ -243,6 +355,15 @@ export class UIManager {
 
     // Mobile UI (no-op on desktop)
     this._initMobile();
+
+    // On mobile, resize canvas after layout settles so margins are accounted for
+    if (window.matchMedia('(max-width: 640px)').matches) {
+      requestAnimationFrame(() => {
+        this.app.canvasManager.resize();
+        this.app.layerManager.resize(this.app.canvasManager.W, this.app.canvasManager.H);
+        this.app.render();
+      });
+    }
   }
 
   // ── Swatch active state (shows which color the inline picker is editing) ──
@@ -443,7 +564,10 @@ export class UIManager {
             <div class="eq-line-box" data-lineidx="${li}">
               <div class="eq-line-top">
                 <span class="eq-type">${escHtml(l.label)}</span>
-                <button class="eq-line-copy-btn" data-lineidx="${li}" title="Copy equation">↗</button>
+                <div style="display:flex;gap:3px">
+                  <button class="eq-line-copy-btn" data-lineidx="${li}" data-fmt="desmos" title="Copy for Desmos">D↗</button>
+                  <button class="eq-line-copy-btn" data-lineidx="${li}" data-fmt="geo"    title="Copy for GeoGebra">G↗</button>
+                </div>
               </div>
               <div class="eq-code">${escHtml(l.desmos)}</div>
             </div>`).join('')
@@ -460,22 +584,12 @@ export class UIManager {
         // Wire per-line copy buttons
         item.querySelectorAll('.eq-line-copy-btn').forEach(btn => {
           btn.addEventListener('click', () => {
-            const li = +btn.dataset.lineidx;
+            const li     = +btn.dataset.lineidx;
             const desmos = lines[li]?.desmos;
             if (!desmos) return;
-            navigator.clipboard.writeText(desmos)
-              .then(() => this._flash('Copied!'))
-              .catch(() => {
-                // fallback for file:// protocol
-                const ta = document.createElement('textarea');
-                ta.value = desmos;
-                ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
-                document.body.appendChild(ta);
-                ta.focus(); ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-                this._flash('Copied!');
-              });
+            const geo = btn.dataset.fmt === 'geo';
+            const text = geo ? desmosToGeoGebra(desmos) : desmos;
+            this._copyText(text, 'Copied!');
           });
         });
 
@@ -514,7 +628,7 @@ export class UIManager {
             : deriveEquations(entry.shape, this.app.fitOptions, worldRange))
           .map(l => l.desmos).filter(d => d).join('\n');
         if (!text) { this._flash('Nothing to copy'); return; }
-        navigator.clipboard.writeText(text).then(() => this._flash('Copied!'));
+        this._copyText(text, 'Copied!');
       });
     });
   }
@@ -547,6 +661,91 @@ export class UIManager {
     if (!el) return;
     el.textContent = msg;
     setTimeout(() => { el.textContent = ''; }, 1500);
+  }
+
+  /** Collect all visible Desmos expression strings across all layers. */
+  _collectDesmos() {
+    const worldRange = this.app.canvasManager.view.xMax - this.app.canvasManager.view.xMin;
+    return this.app.layerManager.layers
+      .flatMap(l => l.shapes)
+      .filter(e => e.visible)
+      .flatMap(e => e.mode === 'inequality'
+        ? deriveInequality(e.shape, this.app.fitOptions, worldRange)
+        : deriveEquations(e.shape, this.app.fitOptions, worldRange))
+      .map(eq => eq.desmos)
+      .filter(Boolean);
+  }
+
+  /** Export all equations as a GeoGebra .ggb file. */
+  async _exportGGBFile(geoExprs) {
+    // Build the geogebra.xml content
+    const expElements = geoExprs.map((expr, i) => {
+      const label = `f${i + 1}`;
+      // Escape XML special chars in the expression
+      const escaped = expr
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+      return `\t\t<expression label="${label}" exp="${escaped}"/>`;
+    }).join('\n');
+
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<geogebra format="5.0" version="5.0.0.0" app="graphing" platform="w">
+\t<gui>
+\t\t<font size="16"/>
+\t</gui>
+\t<euclidianView>
+\t\t<viewNumber viewNo="1"/>
+\t\t<coordSystem xZero="0" yZero="0" scale="50" yscale="50"/>
+\t\t<evSettings axes="true" grid="true"/>
+\t\t<bgColor r="255" g="255" b="255"/>
+\t\t<axesColor r="0" g="0" b="0"/>
+\t\t<gridColor r="192" g="192" b="192"/>
+\t\t<lineStyle thickness="1" type="0" typeHidden="1"/>
+\t</euclidianView>
+\t<kernel>
+\t\t<continuous val="false"/>
+\t\t<decimals val="3"/>
+\t\t<angleUnit val="degree"/>
+\t\t<coordStyle val="0"/>
+\t</kernel>
+\t<construction>
+${expElements}
+\t</construction>
+</geogebra>`;
+
+    try {
+      const JSZip = window.JSZip;
+      if (!JSZip) { this._flash('JSZip not loaded'); return; }
+      const zip = new JSZip();
+      zip.file('geogebra.xml', xml);
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'drawing.ggb';
+      a.click();
+      URL.revokeObjectURL(url);
+      this._flash('Exported drawing.ggb!');
+    } catch (err) {
+      console.error('GGBexport:', err);
+      this._flash('Export failed');
+    }
+  }
+  _copyText(text, successMsg) {
+    navigator.clipboard.writeText(text)
+      .then(() => this._flash(successMsg))
+      .catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        this._flash(successMsg);
+      });
   }
 
   // ── Mobile UI ─────────────────────────────────────────────────────────────
@@ -653,7 +852,7 @@ export class UIManager {
     });
 
     // Equations copy buttons delegate to desktop equivalents
-    document.getElementById('mobile-eq-copy-all-btn')?.addEventListener('click', () => document.getElementById('eq-copy-all-btn')?.click());
+    document.getElementById('mobile-eq-copy-all-btn')?.addEventListener('click', () => document.getElementById('eq-copy-desmos-btn')?.click());
     document.getElementById('mobile-eq-only-btn')?.addEventListener('click',     () => document.getElementById('eq-only-btn')?.click());
 
     // Layer add
